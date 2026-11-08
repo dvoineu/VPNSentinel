@@ -1,27 +1,15 @@
 {
-  "name": "VPN Sentinel — Tactical Leak Guard & Policy Observatory for macOS",
+  "name": "VPN Sentinel — a sentinel for your Mac’s direct internet exit",
   "short_name": "VPN Sentinel",
-  "description": "macOS menu bar utility and interactive policy workbench for preventing accidental direct internet traffic outside a selected VPN or proxy.",
+  "description": "A macOS menu bar utility designed to keep the direct internet exit closed when your VPN or proxy drops.",
   "start_url": "./",
   "display": "standalone",
-  "background_color": "#070b12",
-  "theme_color": "#06b6d4",
+  "background_color": "#F3F0E8",
+  "theme_color": "#16161B",
   "lang": "en",
   "icons": [
-    {
-      "src": "./assets/favicon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml"
-    },
-    {
-      "src": "./assets/icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png"
-    },
-    {
-      "src": "./assets/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png"
-    }
+    { "src": "./assets/favicon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "./assets/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "./assets/icon-512.png", "sizes": "512x512", "type": "image/png" }
   ]
 }

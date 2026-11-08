@@ -1,50 +1,23 @@
-import { I18N, SUPPORTED_LANGUAGES } from './i18n.js';
+/* VPN Sentinel website. No dependencies, no third-party requests except the
+ * optional GitHub releases lookup that keeps download links current. */
+import { I18N, SUPPORTED_LANGUAGES } from './i18n.js?v=3';
 
-const STORAGE_KEY = 'vpnsentinel-language';
-const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const LANG_KEY = 'vpnsentinel-language';
+const THEME_KEY = 'vpnsentinel-theme';
 
-/* ---------- Language ---------- */
+const store = {
+  get(key) { try { return localStorage.getItem(key); } catch { return null; } },
+  set(key, value) { try { localStorage.setItem(key, value); } catch { /* storage unavailable */ } },
+};
 
-function readStoredLanguage() {
-  try {
-    return localStorage.getItem(STORAGE_KEY);
-  } catch {
-    return null;
-  }
-}
-
-function storeLanguage(lang) {
-  try {
-    localStorage.setItem(STORAGE_KEY, lang);
-  } catch {
-    /* storage unavailable: the ?lang link still works */
-  }
-}
-
-function detectInitialLanguage() {
-  const fromUrl = new URLSearchParams(window.location.search).get('lang');
-  if (SUPPORTED_LANGUAGES.includes(fromUrl)) return fromUrl;
-  const saved = readStoredLanguage();
-  if (SUPPORTED_LANGUAGES.includes(saved)) return saved;
-  return 'en';
-}
-
-let currentLanguage = 'en';
-
-/* ---------- Latest release ----------
- * The HTML links point at a known release, so downloads work without
- * JavaScript. On load the page asks GitHub for the latest published
- * release and, if its assets are complete, replaces the links and
- * updates the version shown. Results are cached for an hour.
- */
+/* ---------- Release (links work without JS; refreshed from GitHub) ---------- */
 
 const REPO = 'dvoineu/VPNSentinel';
 const RELEASE_CACHE_KEY = 'vpnsentinel-latest-release';
 const release = { version: '0.1.0', build: '1' };
-
-function fill(value) {
-  return value.replaceAll('{version}', release.version).replaceAll('{build}', release.build);
-}
 
 function parseRelease(data) {
   const match = /^v(\d+(?:\.\d+)*)-build\.(\d+)$/.exec(data.tag_name || '');
@@ -52,9 +25,9 @@ function parseRelease(data) {
   const [, version, build] = match;
   const asset = (name) => data.assets.find((entry) => entry.name === name)?.browser_download_url;
   const links = {
-    dmg: asset('VPN-Sentinel-Demo.zip') || asset(`VPN-Sentinel-${version}-${build}.dmg`),
-    zip: asset('VPN-Sentinel-Experiment.zip'),
-    install: asset('INSTALL.txt') || asset('metadata.json'),
+    demo: asset('VPN-Sentinel-Demo.zip'),
+    experiment: asset('VPN-Sentinel-Experiment.zip'),
+    install: asset('INSTALL.txt'),
     checksums: asset('SHA256SUMS'),
   };
   if (!Object.values(links).every(Boolean)) return null;
@@ -63,565 +36,342 @@ function parseRelease(data) {
 
 function applyRelease(info) {
   if (!info) return;
-  if (info.version && info.build) {
-    release.version = info.version;
-    release.build = info.build;
-  }
+  release.version = info.version;
+  release.build = info.build;
   Object.entries(info.links).forEach(([kind, url]) => {
-    if (!url) return;
-    document.querySelectorAll(`[data-release="${kind}"]`).forEach((a) => {
-      a.href = url;
-    });
+    $$(`[data-release="${kind}"]`).forEach((a) => { a.href = url; });
   });
-  document.querySelectorAll('[data-release="label"]').forEach((el) => {
-    el.textContent = `${release.version} (${release.build})`;
-  });
-  applyLanguage(currentLanguage);
+  $$('[data-release="label"]').forEach((el) => { el.textContent = `${release.version} (${release.build})`; });
 }
 
 async function loadLatestRelease() {
   try {
     const cached = JSON.parse(sessionStorage.getItem(RELEASE_CACHE_KEY) || 'null');
-    if (cached && Date.now() - cached.at < 3600 * 1000) {
-      applyRelease(cached.info);
-      return;
-    }
+    if (cached && Date.now() - cached.at < 3600 * 1000) { applyRelease(cached.info); return; }
   } catch { /* no storage */ }
   try {
     const controller = new AbortController();
-    const timer = window.setTimeout(() => controller.abort(), 5000);
+    const timer = setTimeout(() => controller.abort(), 5000);
     const response = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { Accept: 'application/vnd.github+json' },
       signal: controller.signal,
+      referrerPolicy: 'no-referrer',
     });
-    window.clearTimeout(timer);
+    clearTimeout(timer);
     if (!response.ok) return;
     const info = parseRelease(await response.json());
     if (!info) return;
-    try {
-      sessionStorage.setItem(RELEASE_CACHE_KEY, JSON.stringify({ at: Date.now(), info }));
-    } catch { /* no storage */ }
+    try { sessionStorage.setItem(RELEASE_CACHE_KEY, JSON.stringify({ at: Date.now(), info })); } catch { /* no storage */ }
     applyRelease(info);
-  } catch {
-    /* offline or rate limited: keep the links from the HTML */
-  }
+  } catch { /* offline or rate limited: keep the links from the HTML */ }
 }
 
-/* ---------- Interactive Policy Workbench Simulator ---------- */
+/* ---------- Language ---------- */
 
-const STATES = ['active', 'blocked', 'unknown', 'paused'];
+let lang = 'en';
+const t = (key) => I18N[lang][key] ?? I18N.en[key] ?? '';
 
-const demo = (() => {
-  const hud = document.getElementById('demo-hud');
-  const stateTitleEl = document.getElementById('demo-state-title');
-  const stateBodyEl = document.getElementById('demo-state-body');
-  const routeEl = document.getElementById('demo-route-value');
-  const notifEl = document.getElementById('demo-notif-value');
-  const timerEl = document.getElementById('demo-timer');
-  const cycleBtn = document.getElementById('demo-cycle-toggle');
-  const nasOutcomeEl = document.getElementById('demo-nas-outcome');
-  const printerOutcomeEl = document.getElementById('demo-printer-outcome');
+function detectLanguage() {
+  const fromUrl = new URLSearchParams(location.search).get('lang');
+  if (SUPPORTED_LANGUAGES.includes(fromUrl)) return fromUrl;
+  const saved = store.get(LANG_KEY);
+  if (SUPPORTED_LANGUAGES.includes(saved)) return saved;
+  const preferred = (navigator.languages || [navigator.language || 'en'])[0] || 'en';
+  return preferred.toLowerCase().startsWith('ru') ? 'ru' : 'en';
+}
 
-  let state = 'active';
-  let autoCycle = true;
-  let timerId = null;
+const listeners = [];
+function applyLanguage(next) {
+  lang = SUPPORTED_LANGUAGES.includes(next) ? next : 'en';
+  document.documentElement.lang = lang;
+  document.title = t('metaTitle');
+  $('meta[name="description"]')?.setAttribute('content', t('metaDescription'));
+  $$('[data-i18n]').forEach((el) => { el.textContent = t(el.dataset.i18n); });
+  $$('[data-i18n-html]').forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
+  $$('[data-i18n-aria-label]').forEach((el) => el.setAttribute('aria-label', t(el.dataset.i18nAriaLabel)));
+  $$('[data-language]').forEach((a) => {
+    if (a.dataset.language === lang) a.setAttribute('aria-current', 'true');
+    else a.removeAttribute('aria-current');
+  });
+  listeners.forEach((fn) => fn());
+}
 
-  // Per-network LAN choices matching SentinelDemo.DemoSession
-  let currentNet = 'A';
-  const netStore = {
-    A: { trust: true, denyNas: true, denyPrinter: false },
-    B: { trust: false, denyNas: false, denyPrinter: false },
-  };
+$$('[data-language]').forEach((a) => a.addEventListener('click', (event) => {
+  event.preventDefault();
+  store.set(LANG_KEY, a.dataset.language);
+  const url = new URL(location.href);
+  url.searchParams.set('lang', a.dataset.language);
+  history.replaceState(null, '', url);
+  applyLanguage(a.dataset.language);
+}));
 
-  function evaluateDevice(deviceDenied, trustedLan, currentState) {
-    // In SentinelPolicy: explicit device denial overrides LAN trust and pause
-    if (deviceDenied) return false;
-    if (trustedLan) return true;
-    if (currentState === 'paused') return true;
-    return false;
-  }
+/* ---------- Theme, header, reveal ---------- */
 
-  function render() {
-    const dict = I18N[currentLanguage] || I18N.en;
-    if (hud) hud.dataset.state = state;
-
-    const map = {
-      active: {
-        title: dict.demoStateActiveTitle,
-        body: dict.demoStateActiveBody,
-        route: dict.demoRouteActive,
-        notif: dict.demoNotifActive,
-        clock: '00:05',
-      },
-      blocked: {
-        title: dict.demoStateBlockedTitle,
-        body: dict.demoStateBlockedBody,
-        route: dict.demoRouteBlocked,
-        notif: dict.demoNotifBlocked,
-        clock: 'ALERT',
-      },
-      unknown: {
-        title: dict.demoStateUnknownTitle,
-        body: dict.demoStateUnknownBody,
-        route: dict.demoRouteUnknown,
-        notif: dict.demoNotifUnknown,
-        clock: 'UNCONF',
-      },
-      paused: {
-        title: dict.demoStatePausedTitle,
-        body: dict.demoStatePausedBody,
-        route: dict.demoRoutePaused,
-        notif: dict.demoNotifPaused,
-        clock: '14:42',
-      },
-    }[state];
-
-    if (stateTitleEl) stateTitleEl.textContent = map.title;
-    if (stateBodyEl) stateBodyEl.textContent = map.body;
-    if (routeEl) routeEl.textContent = map.route;
-    if (notifEl) notifEl.textContent = map.notif;
-    if (timerEl) timerEl.textContent = map.clock;
-
-    document.querySelectorAll('[data-demo-state]').forEach((btn) => {
-      const active = btn.dataset.demoState === state;
-      btn.setAttribute('aria-pressed', String(active));
-      btn.classList.toggle('is-active', active);
-    });
-
-    const net = netStore[currentNet];
-    document.querySelectorAll('[data-demo-net]').forEach((btn) => {
-      const active = btn.dataset.demoNet === currentNet;
-      btn.setAttribute('aria-pressed', String(active));
-      btn.classList.toggle('is-active', active);
-    });
-
-    const trustBtn = document.getElementById('demo-toggle-trust');
-    const nasBtn = document.getElementById('demo-toggle-nas');
-    const printerBtn = document.getElementById('demo-toggle-printer');
-    if (trustBtn) trustBtn.setAttribute('aria-pressed', String(net.trust));
-    if (nasBtn) nasBtn.setAttribute('aria-pressed', String(net.denyNas));
-    if (printerBtn) printerBtn.setAttribute('aria-pressed', String(net.denyPrinter));
-
-    const nasAllowed = evaluateDevice(net.denyNas, net.trust, state);
-    const printerAllowed = evaluateDevice(net.denyPrinter, net.trust, state);
-
-    if (nasOutcomeEl) {
-      nasOutcomeEl.textContent = nasAllowed ? dict.demoOutcomeAllowed : dict.demoOutcomeDenied;
-      nasOutcomeEl.dataset.outcome = nasAllowed ? 'allow' : 'deny';
-    }
-    if (printerOutcomeEl) {
-      printerOutcomeEl.textContent = printerAllowed ? dict.demoOutcomeAllowed : dict.demoOutcomeDenied;
-      printerOutcomeEl.dataset.outcome = printerAllowed ? 'allow' : 'deny';
-    }
-
-    if (cycleBtn) {
-      cycleBtn.textContent = autoCycle ? dict.demoAutoPlayPause : dict.demoAutoPlayResume;
-      cycleBtn.setAttribute('aria-pressed', String(!autoCycle));
-    }
-
-    document.dispatchEvent(new CustomEvent('vs-demo', { detail: state }));
-    document.dispatchEvent(new CustomEvent('vh-demo', { detail: state }));
-  }
-
-  function scheduleNext() {
-    window.clearTimeout(timerId);
-    if (!autoCycle || reducedMotion.matches || document.hidden) return;
-    timerId = window.setTimeout(() => {
-      const nextIndex = (STATES.indexOf(state) + 1) % STATES.length;
-      state = STATES[nextIndex];
-      render();
-      scheduleNext();
-    }, 4400);
-  }
-
-  function bindControls() {
-    document.querySelectorAll('[data-demo-state]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        autoCycle = false;
-        state = btn.dataset.demoState;
-        render();
-        scheduleNext();
-      });
-    });
-
-    document.querySelectorAll('[data-demo-net]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const targetNet = btn.dataset.demoNet;
-        if (targetNet && targetNet !== currentNet) {
-          currentNet = targetNet;
-          // Switching network terminates active demo pause early
-          if (state === 'paused') state = 'blocked';
-          autoCycle = false;
-          render();
-          scheduleNext();
-        }
-      });
-    });
-
-    document.getElementById('demo-toggle-trust')?.addEventListener('click', () => {
-      netStore[currentNet].trust = !netStore[currentNet].trust;
-      autoCycle = false;
-      render();
-    });
-    document.getElementById('demo-toggle-nas')?.addEventListener('click', () => {
-      netStore[currentNet].denyNas = !netStore[currentNet].denyNas;
-      autoCycle = false;
-      render();
-    });
-    document.getElementById('demo-toggle-printer')?.addEventListener('click', () => {
-      netStore[currentNet].denyPrinter = !netStore[currentNet].denyPrinter;
-      autoCycle = false;
-      render();
-    });
-
-    cycleBtn?.addEventListener('click', () => {
-      autoCycle = !autoCycle;
-      render();
-      scheduleNext();
-    });
-  }
-
-  bindControls();
-
-  return {
-    restart() {
-      if (reducedMotion.matches) autoCycle = false;
-      render();
-      scheduleNext();
-    },
-    stop() {
-      window.clearTimeout(timerId);
-    },
-  };
-})();
-
-document.addEventListener('visibilitychange', () => {
-  if (document.hidden) demo.stop();
-  else demo.restart();
+const root = document.documentElement;
+$('#theme')?.addEventListener('click', () => {
+  const dark = root.dataset.theme
+    ? root.dataset.theme === 'dark'
+    : matchMedia('(prefers-color-scheme: dark)').matches;
+  root.dataset.theme = dark ? 'light' : 'dark';
+  store.set(THEME_KEY, root.dataset.theme);
 });
 
-/* ---------- Verification & Diagnostics Ledger ---------- */
+const header = $('#top');
+const onScroll = () => header.classList.toggle('is-scrolled', scrollY > 8);
+addEventListener('scroll', onScroll, { passive: true });
+onScroll();
 
-const LEDGER_ENTRIES = {
-  en: [
-    {
-      badge: 'SentinelDiagnostics · schema v1 · demonstrationOnly: true',
-      code: `{
-  "demonstrationOnly": true,
-  "trafficBlockingActive": false,
-  "schemaVersion": 1,
-  "records": [
-    {
-      "sequence": 1,
-      "event": "componentVersion",
-      "summary": "policy 0.1.0",
-      "details": "SentinelPolicy offline rule evaluator"
-    },
-    {
-      "sequence": 2,
-      "event": "stateTransition",
-      "summary": "Blocked -> Active"
-    },
-    {
-      "sequence": 3,
-      "event": "channelAbsent",
-      "summary": "Selected channel became unavailable",
-      "details": "Simulated VPN drop triggered episode #1"
-    },
-    {
-      "sequence": 4,
-      "event": "pauseEnded",
-      "summary": "Ended because the network changed"
-    }
-  ]
-}`,
-    },
-    {
-      badge: 'Issue #68 · Apple Notary Accepted · VPN-Sentinel-Demo.zip',
-      code: `Artifact        : VPN-Sentinel-Demo.zip (652,949 bytes)
-Bundle ID       : com.vpnsentinel.demo (Universal: arm64 + x86_64, minOS 26.0)
-Signing         : Developer ID Application · Hardened Runtime · Secure Timestamp
-Submission ID   : 421b268c-7f31-40ca-a512-f776f28481a5
-Apple Status    : Accepted (0 errors, 0 warnings)
-Stapled Ticket  : Contents/CodeResources (SHA-256: 77fcbc92…4cd988d367dd)
-Final ZIP SHA256: 150192ca7fa601065c6e46b00ae08fee937ccc014157360573c06b396846ebba
-Gatekeeper      : spctl --assess -> accepted (source=Notarized Developer ID)`,
-    },
-    {
-      badge: 'Issue #80 · Apple Notary Accepted · VPN-Sentinel-Experiment.zip',
-      code: `Artifact        : VPN-Sentinel-Experiment.zip (Universal Host + PacketFilter)
-Bundles         : com.vpnsentinel.experiment + .packet-filter (4/4 CDHash)
-Submission ID   : db536713-5e69-4a0b-9dae-31194d0c7c26
-Apple Status    : Accepted (0 errors, 0 warnings)
-Upload ZIP Hash : fe0d7855e8b710d1cdde5856970d4d364a7cd9a3595803e084545bd3df74d2a4
-Stapled Ticket  : ae2a07002344f9b841da3b916290bd7ecf3f8020aa21642348aeefc7a311db4a
-Final ZIP SHA256: 681a17d9767d69a58fac391a7f6604d5f451568c882e1767cfb6d497e79180eb
-Note            : Pass-through provider; does not activate filter or block traffic.`,
-    },
-    {
-      badge: 'Packages/* · 10 Isolated Swift 6 Packages',
-      code: `Packages/
-├── SentinelPolicy         # Pure precedence rules (device denial > LAN > pause > tunnel)
-├── SentinelNotifications  # Outage episodes, 1 alert sound & 5s recovery debounce
-├── SentinelDiagnostics    # Bounded ring buffer & deterministic JSON snapshot export
-├── SentinelContracts      # Versioned settings & command schemas (#54, #55)
-├── SentinelDemo           # Deterministic synthetic session & clock advancement
-├── SentinelPersistence    # Atomic private-directory settings storage (#61)
-├── SentinelCoordinator    # Sequential command processor & fault recovery (#62, #63)
-├── SentinelPackets        # Synthetic IPv4/IPv6/UDP/TCP/DNS packet evaluator (#70)
-├── SentinelRuntime        # Monotonic pause scheduler & signing preflight (#70)
-└── SentinelProxyProtocol  # Offline SOCKS5 & HTTP CONNECT codecs (#70)`,
-    },
-    {
-      badge: 'scripts/check.sh · Zero-Trust Local Pre-Push Gate',
-      code: `$ bash scripts/check.sh
-✓ 10 Swift packages tested (--disable-automatic-resolution)
-✓ SentinelIPC AF_UNIX peer code-signing identity verification passed
-✓ SwiftUI localization & deterministic view state checks (EN / RU) passed
-✓ 51 Python leak-harness tests & 130+ packaging/notarization tests passed
-✓ Shell syntax, plist/strings lint, CommonMark internal link validator passed
-✓ Unsigned Debug SentinelApp & Release Universal SentinelDemoApp compiled`,
-    },
-    {
-      badge: 'macOS Terminal · Verify Downloaded Release Locally',
-      code: `# 1. Verify cryptographic SHA-256 checksums
-shasum -a 256 -c SHA256SUMS
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver((entries) => entries.forEach((e) => {
+    if (e.isIntersecting) { e.target.classList.add('is-in'); io.unobserve(e.target); }
+  }), { rootMargin: '0px 0px -8% 0px' });
+  $$('.reveal').forEach((el) => io.observe(el));
+} else {
+  $$('.reveal').forEach((el) => el.classList.add('is-in'));
+}
 
-# 2. Extract in a clean folder and verify strict universal signature
-ditto -x -k VPN-Sentinel-Demo.zip ./extracted
-codesign --verify --deep --strict --all-architectures "./extracted/VPN Sentinel Demo.app"
+/* ---------- Traffic scene ---------- */
 
-# 3. Validate stapled Apple notarization ticket & Gatekeeper assessment
-xcrun stapler validate "./extracted/VPN Sentinel Demo.app"
-spctl --assess --type execute --verbose=4 "./extracted/VPN Sentinel Demo.app"`,
-    },
-  ],
-  ru: [
-    {
-      badge: 'SentinelDiagnostics · схема v1 · demonstrationOnly: true',
-      code: `{
-  "demonstrationOnly": true,
-  "trafficBlockingActive": false,
-  "schemaVersion": 1,
-  "records": [
-    {
-      "sequence": 1,
-      "event": "componentVersion",
-      "summary": "Политика: 0.1.0",
-      "details": "Офлайн-вычислитель правил SentinelPolicy"
-    },
-    {
-      "sequence": 2,
-      "event": "stateTransition",
-      "summary": "Блокировка -> Канал доступен"
-    },
-    {
-      "sequence": 3,
-      "event": "channelAbsent",
-      "summary": "Выбранный канал перестал быть доступен",
-      "details": "Симуляция обрыва VPN открыла эпизод #1"
-    },
-    {
-      "sequence": 4,
-      "event": "pauseEnded",
-      "summary": "Пауза завершена из-за смены сети"
-    }
-  ]
-}`,
-    },
-    {
-      badge: 'Задача #68 · Принято Apple Notary · VPN-Sentinel-Demo.zip',
-      code: `Архив           : VPN-Sentinel-Demo.zip (652 949 байт)
-Bundle ID       : com.vpnsentinel.demo (Universal: arm64 + x86_64, minOS 26.0)
-Подпись         : Developer ID Application · Hardened Runtime · Secure Timestamp
-Submission ID   : 421b268c-7f31-40ca-a512-f776f28481a5
-Статус Apple    : Accepted (0 ошибок, 0 предупреждений)
-Stapled Ticket  : Contents/CodeResources (SHA-256: 77fcbc92…4cd988d367dd)
-SHA-256 архива  : 150192ca7fa601065c6e46b00ae08fee937ccc014157360573c06b396846ebba
-Gatekeeper      : spctl --assess -> accepted (source=Notarized Developer ID)`,
-    },
-    {
-      badge: 'Задача #80 · Принято Apple Notary · VPN-Sentinel-Experiment.zip',
-      code: `Архив           : VPN-Sentinel-Experiment.zip (Universal Host + PacketFilter)
-Bundle ID       : com.vpnsentinel.experiment + .packet-filter (4/4 CDHash)
-Submission ID   : db536713-5e69-4a0b-9dae-31194d0c7c26
-Статус Apple    : Accepted (0 ошибок, 0 предупреждений)
-SHA-256 отправки: fe0d7855e8b710d1cdde5856970d4d364a7cd9a3595803e084545bd3df74d2a4
-Stapled Ticket  : ae2a07002344f9b841da3b916290bd7ecf3f8020aa21642348aeefc7a311db4a
-SHA-256 архива  : 681a17d9767d69a58fac391a7f6604d5f451568c882e1767cfb6d497e79180eb
-Примечание      : Pass-through расширение; не включает фильтрацию трафика.`,
-    },
-    {
-      badge: 'Packages/* · 10 изолированных пакетов Swift 6',
-      code: `Packages/
-├── SentinelPolicy         # Приоритеты правил (запрет устройства > LAN > пауза > туннель)
-├── SentinelNotifications  # Эпизоды обрыва, 1 звук и 5 секунд стабилизации
-├── SentinelDiagnostics    # Кольцевой буфер в памяти и экспорт снимка в JSON
-├── SentinelContracts      # Схемы настроек и команд (#54, #55)
-├── SentinelDemo           # Синтетический сеанс и управление временем модели
-├── SentinelPersistence    # Атомарное файловое хранилище настроек (#61)
-├── SentinelCoordinator    # Последовательный обработчик команд и сбоев (#62, #63)
-├── SentinelPackets        # Синтетический анализатор пакетов IPv4/IPv6/UDP/TCP/DNS (#70)
-├── SentinelRuntime        # Планировщик паузы и проверка signing metadata (#70)
-└── SentinelProxyProtocol  # Офлайн-кодеки SOCKS5 и HTTP CONNECT (#70)`,
-    },
-    {
-      badge: 'scripts/check.sh · Локальный контур проверки перед push',
-      code: `$ bash scripts/check.sh
-✓ 10 пакетов Swift проверены тестами (--disable-automatic-resolution)
-✓ SentinelIPC: обмен AF_UNIX с проверкой подписи процесса-партнёра успешен
-✓ Проверка состояний SwiftUI и встроенных локализаций (EN / RU) успешна
-✓ 51 тест стенда трафика и 130+ тестов упаковки и нотаризации пройдены
-✓ Проверка синтаксиса shell, plist/strings и внутренних Markdown-ссылок пройдена
-✓ Компиляция Debug SentinelApp и Release Universal SentinelDemoApp завершена`,
-    },
-    {
-      badge: 'Терминал macOS · Локальная проверка скачанного архива',
-      code: `# 1. Сверьте контрольные суммы SHA-256
-shasum -a 256 -c SHA256SUMS
-
-# 2. Извлеките архив и проверьте подпись обеих архитектур (arm64 и x86_64)
-ditto -x -k VPN-Sentinel-Demo.zip ./extracted
-codesign --verify --deep --strict --all-architectures "./extracted/VPN Sentinel Demo.app"
-
-# 3. Проверьте прикреплённый ticket нотаризации Apple и допуск Gatekeeper
-xcrun stapler validate "./extracted/VPN Sentinel Demo.app"
-spctl --assess --type execute --verbose=4 "./extracted/VPN Sentinel Demo.app"`,
-    },
-  ],
+const SCENES = {
+  ok: { key: 'Ok', glyph: 'ok', gate: 'closed', pipe: 'ok', main: 'on-tunnel', up: 'on-tunnel', direct: '',
+    route: 'r-tunnel', color: 'var(--tunnel)', lamp: 'var(--tunnel)', chip: 'chip-tunnel' },
+  leak: { key: 'Leak', glyph: 'off', gate: 'hidden', pipe: 'broken', main: 'on-leak', up: '', direct: 'on-leak',
+    route: 'r-direct', color: 'var(--leak)', lamp: 'var(--tunnel)', chip: 'chip-leak',
+    bubble: { bg: 'var(--leak)', fg: '#fff' } },
+  hold: { key: 'Hold', glyph: 'lost', gate: 'closed', pipe: 'broken', main: '', up: '', direct: '',
+    route: 'r-blocked', color: 'var(--ink-3)', lamp: 'var(--paper-2)', chip: 'chip-hold', toast: true },
+  pause: { key: 'Pause', glyph: 'pause', gate: 'open', pipe: 'idle', main: 'on-pause', up: '', direct: 'on-pause',
+    route: 'r-direct', color: 'var(--pause)', lamp: 'var(--pause)', chip: 'chip-pause',
+    bubble: { bg: 'var(--pause)', fg: '#16161B', timer: true } },
 };
+const ORDER = ['ok', 'leak', 'hold', 'pause'];
 
-let activeLedgerIndex = 0;
+function setupScene() {
+  const svg = $('svg.net');
+  if (!svg) return;
+  const NS = 'http://www.w3.org/2000/svg';
+  const routes = {};
+  $$('path[id^="r-"]', svg).forEach((p) => { routes[p.id] = { el: p, len: p.getTotalLength() }; });
+  const layer = $('#pkts');
+  const bounce = $('#bounce');
+  const buttons = $$('.seg button');
+  const autoBtn = $('#autoplay');
+  const bubbleText = $('#bubble-text');
+  let current = 'ok';
+  let packets = [];
+  let spawnAcc = 0;
+  let lanAcc = 0;
+  let bounceT = 1;
+  let pauseStart = performance.now();
+  let auto = !reducedMotion;
+  let autoTimer = null;
+  // On screen (IntersectionObserver) and tab visibility are tracked separately and
+  // combined on every frame, so the scene resumes after the tab was hidden.
+  let inView = true;
+  const running = () => inView && !document.hidden;
 
-function renderLedger() {
-  const entries = LEDGER_ENTRIES[currentLanguage] || LEDGER_ENTRIES.en;
-  const item = entries[activeLedgerIndex] || entries[0];
-  const badgeEl = document.getElementById('ledger-badge');
-  const codeEl = document.getElementById('ledger-code');
-  if (badgeEl) badgeEl.textContent = item.badge;
-  if (codeEl) codeEl.textContent = item.code;
+  const cls = (el, base, extra) => el.setAttribute('class', extra ? `${base} ${extra}` : base);
+  const pauseText = (seconds) => t('scnPauseBubble').replace('{t}',
+    `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`);
 
-  document.querySelectorAll('[data-seek]').forEach((btn, idx) => {
-    if (idx === activeLedgerIndex) btn.setAttribute('aria-current', 'true');
-    else btn.removeAttribute('aria-current');
-  });
+  function fitBubble() {
+    try {
+      const bb = bubbleText.getBBox();
+      const r = $('#bubble-bg');
+      r.setAttribute('x', bb.x - 16); r.setAttribute('width', bb.width + 32);
+      r.setAttribute('y', bb.y - 9); r.setAttribute('height', bb.height + 18);
+      r.setAttribute('rx', (bb.height + 18) / 2);
+    } catch { /* not rendered yet */ }
+  }
+
+  function makePacket(route, color, duration) {
+    const el = document.createElementNS(NS, 'circle');
+    el.setAttribute('r', route === 'r-lan' ? 4 : 5.5);
+    el.style.fill = color;
+    layer.appendChild(el);
+    return { el, route, t: 0, duration };
+  }
+  function place(p) {
+    const r = routes[p.route];
+    const pt = r.el.getPointAtLength(Math.min(p.t, 1) * r.len);
+    p.el.setAttribute('cx', pt.x);
+    p.el.setAttribute('cy', pt.y);
+  }
+  function drawStatic() {
+    const s = SCENES[current];
+    const n = s.route === 'r-blocked' ? 3 : 7;
+    for (let i = 0; i < n; i += 1) { const p = makePacket(s.route, s.color, 1); p.t = (i + 0.5) / n; place(p); packets.push(p); }
+    for (let i = 0; i < 2; i += 1) { const p = makePacket('r-lan', 'var(--ink-3)', 1); p.t = (i + 0.5) / 2; place(p); packets.push(p); }
+  }
+
+  function renderText() {
+    const s = SCENES[current];
+    const chip = $('#verdict-chip');
+    chip.className = `chip ${s.chip}`;
+    chip.textContent = t(`scn${s.key}Chip`);
+    $('#verdict-title').textContent = t(`scn${s.key}Title`);
+    $('#verdict-body').textContent = t(`scn${s.key}Body`);
+    if (s.bubble) {
+      bubbleText.textContent = s.bubble.timer ? pauseText(900) : t('scnLeakBubble');
+      fitBubble();
+    }
+    autoBtn.textContent = t(auto ? 'autoplayOn' : 'autoplayOff');
+  }
+
+  function apply(key) {
+    current = key;
+    const s = SCENES[key];
+    buttons.forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scn === key)));
+    $('#mb-glyph').dataset.state = s.glyph;
+    $('#mb-slot').classList.toggle('is-hot', s.glyph !== 'off');
+    const gate = $('#gate');
+    gate.classList.toggle('is-hidden', s.gate === 'hidden');
+    gate.classList.toggle('is-open', s.gate === 'open');
+    $('#gate-lamp').style.fill = s.lamp;
+    const pipe = $('#pipe');
+    cls(pipe, 'pipe', s.pipe === 'broken' ? 'is-broken' : '');
+    pipe.style.opacity = s.pipe === 'idle' ? 0.35 : 1;
+    $('#pipe-label').style.opacity = s.pipe === 'ok' ? 1 : 0.45;
+    $('#crack').style.opacity = s.pipe === 'broken' ? 1 : 0;
+    cls($('#w-main'), 'wire', s.main);
+    cls($('#w-tunnel'), 'wire', s.up);
+    cls($('#w-direct'), 'wire', s.direct);
+    const bubble = $('#bubble');
+    bubble.classList.toggle('is-on', Boolean(s.bubble));
+    if (s.bubble) {
+      $('#bubble-bg').style.fill = s.bubble.bg;
+      bubbleText.style.fill = s.bubble.fg;
+    }
+    $('#toast').classList.toggle('is-on', Boolean(s.toast));
+    pauseStart = performance.now();
+    renderText();
+    packets.forEach((p) => p.el.remove());
+    packets = [];
+    if (reducedMotion) drawStatic();
+  }
+
+  let last = performance.now();
+  function tick(now) {
+    const dt = Math.min(now - last, 64);
+    last = now;
+    if (running() && !reducedMotion) {
+      const s = SCENES[current];
+      spawnAcc += dt;
+      lanAcc += dt;
+      if (spawnAcc > (s.route === 'r-blocked' ? 420 : 240)) {
+        spawnAcc = 0;
+        packets.push(makePacket(s.route, s.color, s.route === 'r-tunnel' ? 2100 : s.route === 'r-blocked' ? 900 : 1900));
+      }
+      if (lanAcc > 1100) { lanAcc = 0; packets.push(makePacket('r-lan', 'var(--ink-3)', 900)); }
+      packets = packets.filter((p) => {
+        p.t += dt / p.duration;
+        if (p.t >= 1) {
+          if (p.route === 'r-blocked') bounceT = 0;
+          p.el.remove();
+          return false;
+        }
+        place(p);
+        return true;
+      });
+      if (bounceT < 1) {
+        bounceT = Math.min(1, bounceT + dt / 420);
+        bounce.setAttribute('r', 4 + 16 * bounceT);
+        bounce.setAttribute('opacity', 1 - bounceT);
+      }
+      if (s.bubble?.timer) bubbleText.textContent = pauseText(Math.max(0, 900 - Math.floor((now - pauseStart) / 1000)));
+    }
+    requestAnimationFrame(tick);
+  }
+
+  function setAuto(on) {
+    auto = on;
+    autoBtn.setAttribute('aria-pressed', String(on));
+    autoBtn.textContent = t(on ? 'autoplayOn' : 'autoplayOff');
+    clearInterval(autoTimer);
+    if (on) {
+      autoTimer = setInterval(() => {
+        if (running()) apply(ORDER[(ORDER.indexOf(current) + 1) % ORDER.length]);
+      }, 6000);
+    }
+  }
+
+  buttons.forEach((b) => b.addEventListener('click', () => { setAuto(false); apply(b.dataset.scn); }));
+  autoBtn.addEventListener('click', () => setAuto(!auto));
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(([entry]) => { inView = entry.isIntersecting; }).observe(svg);
+  }
+  addEventListener('resize', () => requestAnimationFrame(fitBubble));
+  listeners.push(renderText);
+
+  apply('ok');
+  setAuto(auto);
+  requestAnimationFrame(tick);
 }
 
-function setupChapters() {
-  const buttons = [...document.querySelectorAll('[data-seek]')];
-  buttons.forEach((button, index) => {
-    button.addEventListener('click', () => {
-      activeLedgerIndex = index;
-      renderLedger();
+/* ---------- A day with Sentinel ---------- */
+
+const DAY = [
+  { glyph: 'ok', clock: '09:05' },
+  { glyph: 'lost', clock: '11:47' },
+  { glyph: 'ok', clock: '11:48' },
+  { glyph: 'pause', clock: '14:30', ring: true },
+  { glyph: 'ok', clock: '14:45' },
+  { glyph: 'unknown', clock: '16:10', warn: true },
+  { glyph: 'ok', clock: '18:20' },
+];
+
+function glyphSvg(state) {
+  return `<svg class="glyph" viewBox="0 0 24 24" data-state="${state}" aria-hidden="true"><rect class="base" x="2" y="20.5" width="20" height="1.6" rx=".8"/><rect class="post" x="4" y="7.5" width="3" height="13.5" rx="1"/><rect class="arm" x="7" y="10" width="15" height="3" rx="1.5"/><path class="arm-dash" d="M8 11.5H21.5"/><circle class="lamp" cx="5.5" cy="4" r="2"/></svg>`;
+}
+
+function setupDay() {
+  const pop = $('#pop');
+  if (!pop) return;
+  let active = 0;
+  const el = (tag, className, text) => {
+    const node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  };
+  function show(i) {
+    active = i;
+    const d = DAY[i];
+    $('#day-glyph').dataset.state = d.glyph;
+    $('#day-clock').textContent = d.clock;
+    const head = el('div', 'pop-head');
+    if (d.ring) {
+      const ring = el('div', 'timer-ring');
+      ring.appendChild(el('span', '', '15:00'));
+      head.appendChild(ring);
+    } else {
+      head.insertAdjacentHTML('beforeend', glyphSvg(d.glyph));
+    }
+    const titles = el('div');
+    const title = el('div', 'pop-title', t(`pop${i}Title`));
+    if (d.warn) title.style.color = 'var(--leak-text)';
+    titles.append(title, el('div', 'pop-sub', t(`pop${i}Sub`)));
+    head.appendChild(titles);
+    const rows = t(`pop${i}Rows`).split('|').map((pair) => {
+      const [k, v] = pair.split('=');
+      const row = el('div', 'pop-row');
+      row.append(el('span', '', k), el('span', '', v));
+      return row;
     });
-  });
-
-  const copyBtn = document.getElementById('ledger-copy');
-  copyBtn?.addEventListener('click', () => {
-    const codeEl = document.getElementById('ledger-code');
-    if (!codeEl || !navigator.clipboard) return;
-    navigator.clipboard.writeText(codeEl.textContent || '').then(() => {
-      const dict = I18N[currentLanguage] || I18N.en;
-      copyBtn.textContent = dict.copiedSnippetBtn;
-      window.setTimeout(() => {
-        copyBtn.textContent = (I18N[currentLanguage] || I18N.en).copySnippetBtn;
-      }, 1600);
-    }).catch(() => {});
-  });
-}
-
-/* ---------- Apply language ---------- */
-
-function applyLanguage(lang) {
-  currentLanguage = SUPPORTED_LANGUAGES.includes(lang) ? lang : 'en';
-  const dict = I18N[currentLanguage];
-
-  document.documentElement.lang = currentLanguage;
-  document.title = dict.metaTitle;
-  document.querySelector('meta[name="description"]')?.setAttribute('content', dict.metaDescription);
-
-  document.querySelectorAll('[data-i18n]').forEach((el) => {
-    const value = dict[el.dataset.i18n];
-    if (value === undefined) return;
-    el.textContent = fill(value);
-    el.hidden = value === '';
-  });
-  document.querySelectorAll('[data-i18n-html]').forEach((el) => {
-    const value = dict[el.dataset.i18nHtml];
-    if (value !== undefined) el.innerHTML = fill(value);
-  });
-  document.querySelectorAll('[data-i18n-aria-label]').forEach((el) => {
-    const value = dict[el.dataset.i18nAriaLabel];
-    if (value) el.setAttribute('aria-label', value);
-  });
-
-  document.querySelectorAll('[data-language]').forEach((link) => {
-    if (link.dataset.language === currentLanguage) link.setAttribute('aria-current', 'true');
-    else link.removeAttribute('aria-current');
-  });
-
-  renderLedger();
-  demo.restart();
-}
-
-function setupLanguageSwitch() {
-  document.querySelectorAll('[data-language]').forEach((link) => {
-    link.addEventListener('click', (event) => {
-      event.preventDefault();
-      const lang = link.dataset.language;
-      storeLanguage(lang);
-      const url = new URL(window.location.href);
-      url.searchParams.set('lang', lang);
-      history.replaceState(null, '', url);
-      applyLanguage(lang);
-    });
-  });
-}
-
-/* ---------- Active section in the header ---------- */
-
-function setupActiveNav() {
-  const links = [...document.querySelectorAll('.primary-nav a')];
-  const sections = links.map((a) => document.querySelector(a.getAttribute('href'))).filter(Boolean);
-  if (!('IntersectionObserver' in window) || sections.length === 0) return;
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      if (!entry.isIntersecting) return;
-      links.forEach((a) => a.classList.toggle('is-active', a.getAttribute('href') === `#${entry.target.id}`));
-    });
-  }, { rootMargin: '-45% 0px -50% 0px' });
-  sections.forEach((s) => observer.observe(s));
-}
-
-/* ---------- Hero 3D scene (loaded after the page, skipped without WebGL) ---------- */
-
-function supportsWebGL() {
-  try {
-    const canvas = document.createElement('canvas');
-    return Boolean(canvas.getContext('webgl2') || canvas.getContext('webgl'));
-  } catch {
-    return false;
+    pop.replaceChildren(head, ...rows, el('div', 'pop-btn', t(`pop${i}Btn`)));
+    $$('.step').forEach((s) => s.classList.toggle('is-active', Number(s.dataset.i) === i));
+  }
+  listeners.push(() => show(active));
+  show(0);
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) show(Number(e.target.dataset.i)); });
+    }, { rootMargin: '-45% 0px -45% 0px' });
+    $$('.step').forEach((s) => io.observe(s));
   }
 }
 
-function loadHeroScene() {
-  const canvas = document.getElementById('hero-canvas');
-  const anchor = document.getElementById('stage-anchor');
-  if (!canvas || !anchor || !supportsWebGL()) return;
-  import('./scene3d.js')
-    .then(({ HeroScene }) => {
-      new HeroScene({ canvas, host: canvas.parentElement, anchor });
-      canvas.classList.add('is-ready');
-    })
-    .catch(() => { /* the page works without the 3D scene */ });
-}
-
-const whenIdle = window.requestIdleCallback || ((fn) => window.setTimeout(fn, 200));
-if (document.readyState === 'complete') whenIdle(loadHeroScene);
-else window.addEventListener('load', () => whenIdle(loadHeroScene), { once: true });
-
-setupLanguageSwitch();
-setupChapters();
-setupActiveNav();
-applyLanguage(detectInitialLanguage());
+setupScene();
+setupDay();
+applyLanguage(detectLanguage());
 loadLatestRelease();

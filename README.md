@@ -2,7 +2,7 @@
 
 [Website (EN)](https://dvoineu.github.io/VPNSentinel/) · [Русская версия](https://dvoineu.github.io/VPNSentinel/?lang=ru) · [Downloads & Release Notes](https://github.com/dvoineu/VPNSentinel/releases)
 
-Tactical leak guard & interactive policy observatory for macOS. This public repository hosts the official bilingual website (`site/`) and verified, Apple-notarized distribution archives in GitHub Releases.
+A macOS menu bar sentinel for the direct internet exit: when your VPN or proxy drops, it is designed to keep direct traffic closed and tell you once. Early prototype — traffic blocking does not work yet. This public repository hosts the bilingual website (`site/`) and the Apple-notarized demo archives in GitHub Releases.
 
 ## Verification
 
