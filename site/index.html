@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="referrer" content="no-referrer">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VPN Sentinel — tactical leak guard &amp; policy observatory for macOS</title>
+  <meta name="description" content="macOS menu bar utility and interactive policy workbench for preventing accidental direct internet traffic outside a selected VPN or proxy. Developer ID signed and Apple notarized.">
+  <meta name="author" content="Aliaksandr Dvoineu">
+  <meta name="robots" content="index, follow, max-image-preview:large">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f6f9fc" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#070b12" media="(prefers-color-scheme: dark)">
+
+  <link rel="canonical" href="https://dvoineu.github.io/VPNSentinel/">
+  <link rel="alternate" hreflang="ru" href="https://dvoineu.github.io/VPNSentinel/?lang=ru">
+  <link rel="alternate" hreflang="en" href="https://dvoineu.github.io/VPNSentinel/?lang=en">
+  <link rel="alternate" hreflang="x-default" href="https://dvoineu.github.io/VPNSentinel/">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="VPN Sentinel">
+  <meta property="og:title" content="VPN Sentinel — tactical leak guard &amp; policy observatory for macOS">
+  <meta property="og:description" content="macOS menu bar utility and interactive policy workbench for preventing accidental direct internet traffic outside a selected VPN or proxy.">
+  <meta property="og:url" content="https://dvoineu.github.io/VPNSentinel/">
+  <meta property="og:image" content="https://dvoineu.github.io/VPNSentinel/assets/og-poster.png">
+  <meta property="og:image:width" content="1280">
+  <meta property="og:image:height" content="720">
+  <meta property="og:locale" content="en_US">
+  <meta property="og:locale:alternate" content="ru_RU">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="VPN Sentinel — tactical leak guard &amp; policy observatory for macOS">
+  <meta name="twitter:description" content="Verify tunnel confirmation, simulate fail-closed drops, manage trusted LAN rules and inspect deterministic diagnostics on macOS.">
+  <meta name="twitter:image" content="https://dvoineu.github.io/VPNSentinel/assets/og-poster.png">
+
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" sizes="192x192" href="./assets/icon-192.png">
+  <link rel="manifest" href="./site.webmanifest">
+  <link rel="stylesheet" href="./css/styles.css">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebSite",
+        "@id": "https://dvoineu.github.io/VPNSentinel/#website",
+        "url": "https://dvoineu.github.io/VPNSentinel/",
+        "name": "VPN Sentinel",
+        "description": "Tactical leak guard and policy observatory for macOS.",
+        "inLanguage": ["en", "ru"]
+      },
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://dvoineu.github.io/VPNSentinel/#software",
+        "name": "VPN Sentinel Demo",
+        "operatingSystem": "macOS 26.0+",
+        "applicationCategory": "SecurityApplication",
+        "softwareVersion": "0.1.0 (1)",
+        "identifier": "com.vpnsentinel.demo",
+        "url": "https://dvoineu.github.io/VPNSentinel/",
+        "downloadUrl": "https://github.com/dvoineu/VPNSentinel/releases/download/v0.1.0-build.1/VPN-Sentinel-Demo.zip",
+        "description": "Universal macOS menu bar utility and interactive policy workbench for evaluating VPN/proxy fail-closed rules, outage episodes, per-network LAN trust, bounded 15-minute pauses and deterministic JSON diagnostics.",
+        "featureList": [
+          "Explicit separation between protection intent and verified blocking confirmation",
+          "Companion design for existing VPNs, remote SOCKS5/HTTP CONNECT proxies and local Mac proxies",
+          "Per-network Trusted LAN rules with higher-priority individual device denials (NAS, printer)",
+          "Bounded 15-minute protection pause that cancels on network change or reboot",
+          "Episode-based outage notifications with 5-second recovery stabilization",
+          "Immutable in-memory diagnostic snapshot preview and deterministic JSON export"
+        ],
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD", "availability": "https://schema.org/InStock" }
+      },
+      {
+        "@type": "FAQPage",
+        "@id": "https://dvoineu.github.io/VPNSentinel/#faq",
+        "mainEntity": [
+          { "@type": "Question", "name": "Does the current version block real internet traffic or prevent leaks yet?", "acceptedAnswer": { "@type": "Answer", "text": "No. Version 0.1.0 (build 1) is an interactive demonstration workbench and architecture validation milestone. Both the Demo app and the pass-through Experimental bundle explicitly state “Traffic blocking is not active” and never modify your Mac’s routes, VPN, DNS or firewall." } },
+          { "@type": "Question", "name": "What is the difference between VPN-Sentinel-Demo.zip and VPN-Sentinel-Experiment.zip?", "acceptedAnswer": { "@type": "Answer", "text": "VPN-Sentinel-Demo.zip contains only the standalone SwiftUI menu bar workbench (com.vpnsentinel.demo) without any system extension or entitlements. VPN-Sentinel-Experiment.zip (com.vpnsentinel.experiment) additionally embeds the signed and notarized pass-through NetworkExtension packet filter used for signing and packaging verification." } },
+          { "@type": "Question", "name": "Why does VPN Sentinel distinguish between “protection intent” and “blocking confirmation”?", "acceptedAnswer": { "@type": "Answer", "text": "A saved setting or a green icon in a VPN client does not prove that packets cannot leave your Mac directly. In VPN Sentinel, protection is only shown as active when both a permitted connection is selected and current enforcement confirmation is present; otherwise the state is shown as Unconfirmed." } },
+          { "@type": "Question", "name": "How do Trusted LAN and individual device denials interact?", "acceptedAnswer": { "@type": "Answer", "text": "Each network starts untrusted. You can explicitly trust a network for local access, while still denying specific devices such as a NAS or printer. In SentinelPolicy, an explicit device denial has higher priority than both network trust and the 15-minute pause." } },
+          { "@type": "Question", "name": "How does the 15-minute protection pause work?", "acceptedAnswer": { "@type": "Answer", "text": "When you start a pause, direct internet access is permitted in the model for up to 15 minutes. Switching to another network, rebooting, or clicking “End pause” terminates the pause immediately so direct access is never left open by accident." } }
+        ]
+      }
+    ]
+  }
+  </script>
+</head>
+<body>
+  <a href="#main-content" class="skip-link" data-i18n="skipToContent">Skip to main content</a>
+
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#top" class="brand" aria-label="VPN Sentinel — home" data-i18n-aria-label="homeLabel">
+        <img src="./assets/icon-192.png" alt="" class="brand-icon" width="32" height="32" fetchpriority="high">
+        <span>VPN Sentinel</span>
+        <span class="brand-tag">LAB 0.1</span>
+      </a>
+      <nav class="primary-nav" aria-label="Main navigation" data-i18n-aria-label="navigationLabel">
+        <a href="#benefits" data-i18n="navBenefits">Principles</a>
+        <a href="#shortcuts" data-i18n="navShortcuts">Policy Matrix</a>
+        <a href="#start" data-i18n="navStart">Get started</a>
+        <a href="#video" data-i18n="navVideo">Verification</a>
+        <a href="#whats-new" data-i18n="navNew">Release 0.1.0</a>
+        <a href="#faq" data-i18n="navFaq">FAQ</a>
+      </nav>
+      <div class="header-actions">
+        <div class="language-switch" role="group" aria-label="Website language" data-i18n-aria-label="languageLabel">
+          <a href="?lang=en" class="lang-switch" data-language="en" lang="en" hreflang="en" aria-current="true">EN</a>
+          <a href="?lang=ru" class="lang-switch" data-language="ru" lang="ru" hreflang="ru">RU</a>
+        </div>
+        <a href="#download" class="btn btn-primary btn-small" data-i18n="headerDownloadCta">Download</a>
+      </div>
+    </div>
+  </header>
+
+  <main id="main-content">
+    <!-- 1. Hero & Live Policy Workbench -->
+    <section id="top" class="hero">
+      <canvas class="hero-canvas" id="hero-canvas" aria-hidden="true"></canvas>
+      <div class="container hero-grid">
+        <div class="hero-copy">
+          <p class="eyebrow" data-i18n="heroEyebrow">Universal macOS 26+ · arm64 &amp; x86_64 · Apple Notarized</p>
+          <h1>
+            <span data-i18n="heroTitlePrefix">Zero silent direct leaks</span>
+            <span class="gradient-text" data-i18n="heroTitleHighlight">outside your chosen VPN or proxy</span>
+          </h1>
+          <p class="lead" data-i18n-html="heroLead">VPN Sentinel is a macOS menu bar utility engineered to prevent accidental direct internet traffic when a VPN or proxy drops. Press <kbd>⌘ D</kbd> to explore the interactive policy workbench, test fail-closed outage episodes, configure per-network LAN trust and inspect deterministic diagnostics.</p>
+          <p class="honesty-callout" data-i18n="heroHonestyBadge">Stage E1 Status: v0.1.0 (1) ships as an Apple-notarized offline policy workbench &amp; pass-through experimental bundle. Real traffic filtering is not active yet.</p>
+          <div class="cta-row">
+            <a href="#download" class="btn btn-primary btn-large">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0-5-5m5 5 5-5M5 20h14"/></svg>
+              <span data-i18n="heroDownloadPrimary">Download for macOS</span>
+            </a>
+            <a href="#video" class="btn btn-secondary btn-large">
+              <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
+              <span data-i18n="heroWatchGuide">Inspect SHA-256 &amp; Notarization</span>
+            </a>
+          </div>
+          <p class="hero-meta" data-i18n="heroMeta">Version 0.1.0 (1) · Developer ID signed &amp; Apple notarized · English and Russian interface</p>
+        </div>
+
+        <figure class="demo" aria-label="Interactive VPN Sentinel policy workbench simulator" data-i18n-aria-label="demoLabel">
+          <div class="stage-anchor" id="stage-anchor" aria-hidden="true"></div>
+          <div class="demo-window">
+            <div class="demo-titlebar">
+              <span class="dot red" aria-hidden="true"></span>
+              <span class="dot yellow" aria-hidden="true"></span>
+              <span class="dot green" aria-hidden="true"></span>
+              <span class="demo-title" data-i18n="demoWindowTitle">VPN Sentinel Demo — Policy Workbench</span>
+              <button type="button" class="demo-cycle-btn" id="demo-cycle-toggle" aria-pressed="false" data-i18n="demoAutoPlayPause">Pause cycle</button>
+            </div>
+            <div class="demo-banner">
+              <span class="demo-banner-mode" data-i18n="demoBannerMode">Demonstration mode</span>
+              <span class="demo-banner-status" data-i18n="demoBannerStatus">Traffic blocking is not active</span>
+            </div>
+            <div class="demo-body">
+              <div class="demo-tabs" role="group" aria-label="Simulated policy states">
+                <button type="button" class="demo-tab is-active" data-demo-state="active" aria-pressed="true" data-i18n="demoTabActive">Tunnel Active</button>
+                <button type="button" class="demo-tab" data-demo-state="blocked" aria-pressed="false" data-i18n="demoTabBlocked">Connection Drop</button>
+                <button type="button" class="demo-tab" data-demo-state="unknown" aria-pressed="false" data-i18n="demoTabUnknown">Unconfirmed</button>
+                <button type="button" class="demo-tab" data-demo-state="paused" aria-pressed="false" data-i18n="demoTabPaused">15-Min Pause</button>
+              </div>
+
+              <div class="demo-state-card">
+                <div class="demo-state-head">
+                  <strong id="demo-state-title" data-i18n="demoStateActiveTitle">Example: selected connection available</strong>
+                  <div class="hud" id="demo-hud" data-state="active">
+                    <span class="hud-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+                    <span class="hud-timer" id="demo-timer">00:05</span>
+                  </div>
+                </div>
+                <p id="demo-state-body" data-i18n="demoStateActiveBody">The model permits the selected connection and denies direct internet access. No traffic is filtered on this Mac.</p>
+              </div>
+
+              <div class="demo-telemetry">
+                <div class="demo-telemetry-row">
+                  <span class="demo-telemetry-label" data-i18n="demoRouteLabel">Model route decision</span>
+                  <span class="demo-telemetry-val" id="demo-route-value" data-i18n="demoRouteActive">Mac → Encrypted Tunnel (Direct internet denied)</span>
+                </div>
+                <div class="demo-telemetry-row">
+                  <span class="demo-telemetry-label" data-i18n="demoNotifLabel">Notification intent</span>
+                  <span class="demo-telemetry-val" id="demo-notif-value" data-i18n="demoNotifActive">Connection restored after 5 s: silent notification intent.</span>
+                </div>
+              </div>
+
+              <div class="demo-lan-box">
+                <div class="demo-lan-top">
+                  <span class="demo-lan-title" data-i18n="demoLanHeading">Interactive LAN &amp; device rules (PolicyRules)</span>
+                  <div class="demo-net-switch">
+                    <button type="button" class="demo-pill-btn is-active" data-demo-net="A" aria-pressed="true" data-i18n="demoNetABtn">Network A</button>
+                    <button type="button" class="demo-pill-btn" data-demo-net="B" aria-pressed="false" data-i18n="demoNetBBtn">Network B</button>
+                  </div>
+                </div>
+                <div class="demo-toggles">
+                  <button type="button" class="demo-pill-btn" id="demo-toggle-trust" aria-pressed="true" data-i18n="demoTrustToggle">Trust LAN</button>
+                  <button type="button" class="demo-pill-btn" id="demo-toggle-nas" aria-pressed="true" data-i18n="demoDenyNasToggle">Deny NAS</button>
+                  <button type="button" class="demo-pill-btn" id="demo-toggle-printer" aria-pressed="false" data-i18n="demoDenyPrinterToggle">Deny Printer</button>
+                </div>
+                <div class="demo-outcomes">
+                  <div class="demo-outcome-item">
+                    <span data-i18n="demoNasLabel">Example NAS access</span>
+                    <span class="demo-outcome-badge" id="demo-nas-outcome" data-outcome="deny" data-i18n="demoOutcomeDenied">Denied by model rules</span>
+                  </div>
+                  <div class="demo-outcome-item">
+                    <span data-i18n="demoPrinterLabel">Example printer access</span>
+                    <span class="demo-outcome-badge" id="demo-printer-outcome" data-outcome="allow" data-i18n="demoOutcomeAllowed">Allowed by model rules</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </figure>
+      </div>
+    </section>
+
+    <!-- 2. Architectural Principles -->
+    <section id="benefits" class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker" data-i18n="benefitsKicker">Architectural principles</p>
+          <h2 data-i18n="benefitsTitle">Honest telemetry instead of fake green checkmarks</h2>
+          <p class="section-sub" data-i18n="benefitsSubtitle">Most kill switches equate a saved toggle with active protection. VPN Sentinel separates user intent from verified enforcement at every layer.</p>
+        </div>
+        <ul class="benefits-grid">
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+            <h3 data-i18n="benefit1Title">Intent vs. confirmation</h3>
+            <p data-i18n="benefit1Body">Selecting a rule expresses protection intent, not proof of filtering. Whenever enforcement confirmation is absent, the state is explicitly shown as Unconfirmed.</p>
+          </li>
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="3"/><circle cx="18" cy="6" r="3"/><circle cx="18" cy="18" r="3"/><path d="m8.7 10.7 6.6-3.4M8.7 13.3l6.6 3.4"/></svg></span>
+            <h3 data-i18n="benefit2Title">Companion for existing clients</h3>
+            <p data-i18n="benefit2Body">Works alongside PureVPN, WireGuard, OpenVPN, remote SOCKS5/HTTP CONNECT proxies and local Mac proxy apps instead of replacing your tunnel client.</p>
+          </li>
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="14" rx="2"/><path d="M9 9h6M9 13h4"/><path d="m15 15 4 4m0-4-4 4"/></svg></span>
+            <h3 data-i18n="benefit3Title">Device denials win first</h3>
+            <p data-i18n="benefit3Body">Individual device blocks (such as a NAS or printer) take strict priority over both local network trust and the 15-minute protection pause.</p>
+          </li>
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5M9 2h6"/></svg></span>
+            <h3 data-i18n="benefit4Title">Bounded 15-minute pause</h3>
+            <p data-i18n="benefit4Body">Temporary direct internet access never stays forgotten forever. The pause expires in 15 minutes and ends immediately on network change, reboot or manual resume.</p>
+          </li>
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span>
+            <h3 data-i18n="benefit5Title">Episode-based outage alerts</h3>
+            <p data-i18n="benefit5Body">Requests a single alert sound when a permitted tunnel drops and a silent notification after 5 stable seconds of recovery—preventing alert storms.</p>
+          </li>
+          <li class="card benefit">
+            <span class="benefit-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg></span>
+            <h3 data-i18n="benefit6Title">Deterministic diagnostics</h3>
+            <p data-i18n="benefit6Body">Freezes an immutable in-memory snapshot so you can review every record and toggle optional details before exporting a demo-marked JSON file.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- 3. Policy Precedence & Controls Matrix -->
+    <section id="shortcuts" class="section section-soft">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker" data-i18n="shortcutsKicker">Policy &amp; controls matrix</p>
+          <h2 data-i18n="shortcutsTitle">Decision precedence and operator controls</h2>
+          <p class="section-sub" data-i18n="shortcutsSubtitle">Every packet and state transition in SentinelPolicy follows a deterministic, auditable priority order.</p>
+        </div>
+        <div class="cheat-grid">
+          <div class="card cheat">
+            <h3 data-i18n="keysHeading">Policy evaluation precedence (1 → 5)</h3>
+            <dl class="cheat-list">
+              <div><dt data-i18n="key1Keys">1. Device denial</dt><dd data-i18n="key1Action">Explicitly denied LAN devices (NAS, printer) are blocked even in a trusted network or during a pause</dd></div>
+              <div><dt data-i18n="key2Keys">2. Trusted LAN</dt><dd data-i18n="key2Action">Permits direct access only to non-denied local devices on an explicitly trusted network</dd></div>
+              <div><dt data-i18n="key3Keys">3. 15-min pause</dt><dd data-i18n="key3Action">Allows temporary direct internet access until timer expiry, network switch, reboot or resume</dd></div>
+              <div><dt data-i18n="key4Keys">4. Confirmed tunnel</dt><dd data-i18n="key4Action">Routes traffic through the explicitly selected VPN, remote proxy or local Mac proxy with active confirmation</dd></div>
+              <div><dt data-i18n="key5Keys">5. Fail-closed gate</dt><dd data-i18n="key5Action">Denies direct internet bypass whenever the selected tunnel is unavailable or unconfirmed</dd></div>
+            </dl>
+          </div>
+          <div class="card cheat">
+            <h3 data-i18n="commandsHeading">Menu bar &amp; verification controls</h3>
+            <dl class="cheat-list">
+              <div><dt class="say" data-i18n="cmd1Say">⌘ D in menu bar</dt><dd data-i18n="cmd1Does">Open the interactive Demonstration Workbench window</dd></div>
+              <div><dt class="say" data-i18n="cmd2Say">⌘ Q in menu bar</dt><dd data-i18n="cmd2Does">Quit VPN Sentinel Demo cleanly (session resets on quit)</dd></div>
+              <div><dt class="say" data-i18n="cmd3Say">Switch Network A / B</dt><dd data-i18n="cmd3Does">Immediately terminates any active pause and resets untrusted network state</dd></div>
+              <div><dt class="say" data-i18n="cmd4Say">Advance +1 minute</dt><dd data-i18n="cmd4Does">Steps synthetic model clock forward without touching macOS system time</dd></div>
+              <div><dt class="say" data-i18n="cmd5Say">shasum -a 256 -c</dt><dd data-i18n="cmd5Does">Verifies downloaded ZIP and metadata against published SHA256SUMS</dd></div>
+            </dl>
+            <p class="note" data-i18n="commandsNote">All visible labels in the app and on this site follow the project Glossary: no unverified protection claims are ever displayed.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4. Get started -->
+    <section id="start" class="section">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker" data-i18n="startKicker">Get started</p>
+          <h2 data-i18n="startTitle">Explore the notarized build in four steps</h2>
+          <p class="section-sub" data-i18n="startSubtitle">No background daemon, no kernel kext and no system network modifications. Launch the menu bar workbench in under a minute.</p>
+        </div>
+
+        <ol class="steps">
+          <li class="step">
+            <div class="step-text">
+              <h3 data-i18n="step1Title">Download and verify the archive</h3>
+              <p data-i18n-html="step1Body">Download <strong>VPN-Sentinel-Demo.zip</strong> (or the experimental bundle), extract it and optionally verify <code>SHA256SUMS</code>. Drag <strong>VPN Sentinel Demo.app</strong> to <strong>Applications</strong>.</p>
+              <p class="note" data-i18n="step1Note">Universal binary (arm64 &amp; x86_64) built for macOS 26.0+, signed with Developer ID Application and notarized by Apple.</p>
+            </div>
+            <div class="step-visual install-visual" aria-hidden="true">
+              <img src="./assets/icon-192.png" alt="" width="64" height="64" loading="lazy">
+              <svg class="install-arrow" viewBox="0 0 60 24"><path d="M2 12h52m-8-8 8 8-8 8"/></svg>
+              <span class="folder"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"/></svg><span data-i18n="folderApplications">Applications</span></span>
+            </div>
+          </li>
+
+          <li class="step">
+            <div class="step-text">
+              <h3 data-i18n="step2Title">Open the flask icon in the menu bar</h3>
+              <p data-i18n-html="step2Body">Launch the app. Because it runs as an <code>LSUIElement</code> utility, it lives quietly in the top-right macOS menu bar with a <strong>flask icon</strong>. Click it to view the live status banner.</p>
+              <p class="note" data-i18n="step2Note">Both the menu popover and all windows permanently display “Demonstration mode” and “Traffic blocking is not active”.</p>
+            </div>
+            <div class="step-visual">
+              <ul class="perm-list">
+                <li>
+                  <span class="perm-icon shield" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 3h6m-5 0v5l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/></svg></span>
+                  <span class="perm-text"><strong data-i18n="perm1Title">Zero network alterations</strong><span data-i18n="perm1Body">Does not alter VPN routes, DNS, PF firewall or system settings.</span></span>
+                  <span class="perm-ok" data-i18n="permGranted">Verified</span>
+                </li>
+                <li>
+                  <span class="perm-icon notary" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg></span>
+                  <span class="perm-text"><strong data-i18n="perm2Title">Apple Gatekeeper verified</strong><span data-i18n="perm2Body">Stapled notarization ticket passes spctl Notarized Developer ID assessment.</span></span>
+                  <span class="perm-ok" data-i18n="permGranted">Verified</span>
+                </li>
+              </ul>
+            </div>
+          </li>
+
+          <li class="step">
+            <div class="step-text">
+              <h3 data-i18n="step3Title">Choose the right artifact for your task</h3>
+              <p data-i18n-html="step3Body">Two separately notarized universal archives are documented in the repository: the clean <strong>Demo</strong> app without extensions, and the <strong>Experiment</strong> bundle with an embedded pass-through <code>NetworkExtension</code>.</p>
+              <p class="note" data-i18n="step3Note">Neither artifact activates a packet filter or blocks real traffic on your Mac.</p>
+            </div>
+            <div class="step-visual">
+              <table class="model-table">
+                <caption data-i18n="modelTableCaption">Signed &amp; Apple-notarized universal artifacts (v0.1.0 build 1)</caption>
+                <thead>
+                  <tr>
+                    <th scope="col" data-i18n="modelColMac">Artifact</th>
+                    <th scope="col" data-i18n="modelColModel">Bundle &amp; contents</th>
+                    <th scope="col" data-i18n="modelColSize">SHA-256 (prefix)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="is-best">
+                    <td data-i18n="modelRow1Mac">VPN-Sentinel-Demo.zip (Recommended)</td>
+                    <td><strong>SentinelDemoApp</strong> <span class="badge" data-i18n="modelRecommended">Primary</span><span class="model-note" data-i18n="modelRow1Note">com.vpnsentinel.demo · pure SwiftUI workbench, no system extension</span></td>
+                    <td class="num" data-i18n="modelRow1Size">150192ca…6ebba</td>
+                  </tr>
+                  <tr>
+                    <td data-i18n="modelRow2Mac">VPN-Sentinel-Experiment.zip</td>
+                    <td><strong>SentinelApp + NE</strong><span class="model-note" data-i18n="modelRow2Note">com.vpnsentinel.experiment + pass-through packet-filter extension</span></td>
+                    <td class="num" data-i18n="modelRow2Size">681a17d9…80eb</td>
+                  </tr>
+                  <tr>
+                    <td data-i18n="modelRow3Mac">SHA256SUMS &amp; metadata.json</td>
+                    <td><strong>Provenance</strong><span class="model-note" data-i18n="modelRow3Note">schema v2 provenance, submission UUIDs &amp; ticket hashes</span></td>
+                    <td class="num" data-i18n="modelRow3Size">Manifest</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </li>
+
+          <li class="step">
+            <div class="step-text">
+              <h3 data-i18n="step4Title">Press ⌘ D and test fault scenarios</h3>
+              <p data-i18n-html="step4Body">Press <kbd>⌘ Command</kbd> + <kbd>D</kbd> from the menu bar to open the scenario window. Simulate tunnel connection and drop, remove confirmation, start a 15-minute pause, switch between Network A and B, and preview JSON diagnostics.</p>
+              <p class="note" data-i18n="step4Note">Closing windows keeps the 15-minute demo countdown running while the menu bar app remains open. Quitting resets the synthetic session.</p>
+            </div>
+            <div class="step-visual keys-visual" aria-hidden="true">
+              <span class="keycap keycap-xl">⌘<small>command</small></span>
+              <span class="plus">+</span>
+              <span class="keycap keycap-xl keycap-wide">D</span>
+            </div>
+          </li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- 5. Interactive Verification & Diagnostics Ledger -->
+    <section id="video" class="section section-soft">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker" data-i18n="videoKicker">Verification &amp; diagnostics ledger</p>
+          <h2 data-i18n="videoTitle">Inspect real notarization proofs, JSON snapshots &amp; architecture</h2>
+          <p class="section-sub" data-i18n="videoSubtitle">Select any ledger tab on the right to inspect the actual Apple Notary submission evidence, deterministic JSON diagnostic format, modular Swift packages and terminal verification commands.</p>
+        </div>
+        <div class="video-layout">
+          <div class="ledger-terminal">
+            <div class="ledger-header">
+              <span class="ledger-badge" id="ledger-badge">SentinelDiagnostics · schema v1 · demonstrationOnly: true</span>
+              <button type="button" class="ledger-copy-btn" id="ledger-copy" data-i18n="copySnippetBtn">Copy to clipboard</button>
+            </div>
+            <pre class="ledger-pre" tabindex="0"><code id="ledger-code">{
+  "demonstrationOnly": true,
+  "trafficBlockingActive": false,
+  "schemaVersion": 1,
+  "records": [
+    {
+      "sequence": 1,
+      "event": "componentVersion",
+      "summary": "policy 0.1.0",
+      "details": "SentinelPolicy offline rule evaluator"
+    }
+  ]
+}</code></pre>
+          </div>
+          <nav class="chapters" aria-labelledby="chapters-heading">
+            <h3 id="chapters-heading" data-i18n="chaptersHeading">Inspection ledger</h3>
+            <ol>
+              <li><button type="button" data-seek="0" aria-current="true"><span class="time">01</span><span data-i18n="chapter1">Diagnostic JSON snapshot</span></button></li>
+              <li><button type="button" data-seek="1"><span class="time">02</span><span data-i18n="chapter2">Demo notarization (#68)</span></button></li>
+              <li><button type="button" data-seek="2"><span class="time">03</span><span data-i18n="chapter3">NetworkExtension notarization (#80)</span></button></li>
+              <li><button type="button" data-seek="3"><span class="time">04</span><span data-i18n="chapter4">10 modular Swift packages</span></button></li>
+              <li><button type="button" data-seek="4"><span class="time">05</span><span data-i18n="chapter5">Pre-push verification suite</span></button></li>
+              <li><button type="button" data-seek="5"><span class="time">06</span><span data-i18n="chapter6">Terminal verification commands</span></button></li>
+            </ol>
+            <a class="text-link" href="https://github.com/dvoineu/VPNSentinel/releases" data-i18n="videoDownload">Read full validation reports in repository →</a>
+          </nav>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6. What's new -->
+    <section id="whats-new" class="section" aria-labelledby="whats-new-title">
+      <div class="container">
+        <div class="section-head">
+          <p class="kicker" data-i18n="newKicker">Latest release · 0.1.0 (1)</p>
+          <h2 id="whats-new-title" data-i18n="newTitle">What’s new in VPN Sentinel</h2>
+          <p class="section-sub" data-i18n="newSubtitle">Milestone foundations #48–#80: offline policy engine, SwiftUI workbench and Apple notarization.</p>
+        </div>
+        <ul class="news-grid">
+          <li class="card">
+            <h3 data-i18n="newSetupTitle">Notarized universal Demo (#68)</h3>
+            <p data-i18n="newSetupBody">VPN-Sentinel-Demo.zip is signed with Developer ID Application, notarized by Apple (Submission 421b268c-7f31-40ca-a512-f776f28481a5), stapled and verified with Gatekeeper.</p>
+          </li>
+          <li class="card">
+            <h3 data-i18n="newTrialTitle">Notarized NE Experiment (#80)</h3>
+            <p data-i18n="newTrialBody">VPN-Sentinel-Experiment.zip embeds the universal host and pass-through packet-filter extension (Submission db536713-5e69-4a0b-9dae-31194d0c7c26, 4/4 CDHash verified).</p>
+          </li>
+          <li class="card">
+            <h3 data-i18n="newModelTitle">10 verified Swift packages (#70)</h3>
+            <p data-i18n="newModelBody">Includes SentinelPolicy, SentinelNotifications, SentinelDiagnostics, SentinelContracts, SentinelPersistence, SentinelCoordinator, SentinelPackets, SentinelRuntime, SentinelProxyProtocol and SentinelIPC.</p>
+          </li>
+        </ul>
+        <p class="news-foot">
+          <span data-i18n="newPreserved">All 280+ unit, UI localization, IPC and loopback harness tests pass in isolated pre-push clones before every commit is published.</span>
+          <a class="text-link" href="https://github.com/dvoineu/VPNSentinel/releases/tag/v0.1.0-build.1" data-i18n="newFullNotes">Read the full validation reports and release notes →</a>
+        </p>
+      </div>
+    </section>
+
+    <!-- 7. Download -->
+    <section id="download" class="section section-soft">
+      <div class="container">
+        <div class="download-card">
+          <div class="download-main">
+            <img src="./assets/icon-192.png" alt="VPN Sentinel app icon" width="80" height="80" loading="lazy" class="download-icon">
+            <p class="kicker" data-i18n="dlKicker">Universal Binary (arm64 &amp; x86_64) · macOS 26.0 or later</p>
+            <h2 data-i18n="dlTitle">Install VPN Sentinel on your Mac</h2>
+            <p data-i18n="dlDesc">VPN Sentinel 0.1.0 (build 1) for Macs with Apple Silicon and Intel. Signed with Developer ID and notarized by Apple. Choose the standalone Demo Workbench or the Experimental NetworkExtension bundle.</p>
+            <div class="cta-row">
+              <a href="https://github.com/dvoineu/VPNSentinel/releases/download/v0.1.0-build.1/VPN-Sentinel-Demo.zip" class="btn btn-primary btn-large" data-release="dmg" data-i18n="dlBtnDmg">Download VPN Sentinel Demo 0.1.0 (ZIP)</a>
+              <a href="https://github.com/dvoineu/VPNSentinel/releases/download/v0.1.0-build.1/VPN-Sentinel-Experiment.zip" class="btn btn-secondary btn-large" data-release="zip" data-i18n="dlBtnZip">Download Experimental NE Bundle (ZIP)</a>
+            </div>
+            <p class="download-links">
+              <a href="https://github.com/dvoineu/VPNSentinel/releases/download/v0.1.0-build.1/INSTALL.txt" data-release="install" data-i18n="dlInstall">Installation &amp; build guide</a>
+              <a href="https://github.com/dvoineu/VPNSentinel/releases/download/v0.1.0-build.1/SHA256SUMS" data-release="checksums" data-i18n="dlChecksums">SHA-256 checksums</a>
+              <a href="https://github.com/dvoineu/VPNSentinel/releases" data-i18n="dlVersions">All releases</a>
+            </p>
+            <div class="sha-box" aria-label="SHA-256 checksums">
+              <div><strong>Demo ZIP SHA-256:</strong> 150192ca7fa601065c6e46b00ae08fee937ccc014157360573c06b396846ebba</div>
+              <div><strong>Experiment ZIP SHA-256:</strong> 681a17d9767d69a58fac391a7f6604d5f451568c882e1767cfb6d497e79180eb</div>
+            </div>
+          </div>
+          <div class="download-steps">
+            <h3 data-i18n="dlChecklistTitle">After downloading</h3>
+            <ol>
+              <li data-i18n="dlStep1">Verify the archive against SHA256SUMS, extract it and move VPN Sentinel Demo.app to Applications.</li>
+              <li data-i18n="dlStep2">Launch the app and click the flask icon in the macOS menu bar.</li>
+              <li data-i18n="dlStep3">Press ⌘D to open the Demonstration Workbench and test connection drops, LAN trust and device denials.</li>
+              <li data-i18n="dlStep4">Open Demo Diagnostics to inspect the frozen event log and test deterministic JSON export.</li>
+            </ol>
+            <p class="note" data-i18n="dlUpdate">Note: This demonstration workbench operates entirely in memory and does not filter real network traffic or modify macOS settings.</p>
+            <p class="version-line">VPN Sentinel <span data-release="label">0.1.0 (1)</span> · Universal (arm64 / x86_64) · macOS 26+</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 8. FAQ -->
+    <section id="faq" class="section">
+      <div class="container narrow">
+        <div class="section-head">
+          <p class="kicker" data-i18n="faqKicker">Questions &amp; boundaries</p>
+          <h2 data-i18n="faqTitle">Frequently asked questions</h2>
+        </div>
+        <div class="faq-list">
+          <details name="faq" class="faq-item" open>
+            <summary data-i18n="faqQ1">Does the current version block real internet traffic or prevent leaks yet?</summary>
+            <p data-i18n="faqA1">No. Version 0.1.0 (build 1) is an interactive demonstration workbench and architecture validation milestone. Both the Demo app and the pass-through Experimental bundle explicitly state “Traffic blocking is not active” and never modify your Mac’s routes, VPN, DNS or firewall.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ2">What is the difference between VPN-Sentinel-Demo.zip and VPN-Sentinel-Experiment.zip?</summary>
+            <p data-i18n="faqA2">VPN-Sentinel-Demo.zip contains only the standalone SwiftUI menu bar workbench (com.vpnsentinel.demo) without any system extension or entitlements. VPN-Sentinel-Experiment.zip (com.vpnsentinel.experiment) additionally embeds the signed and notarized pass-through NetworkExtension packet filter used for signing and packaging verification.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ3">Why does VPN Sentinel distinguish between “protection intent” and “blocking confirmation”?</summary>
+            <p data-i18n="faqA3">A saved setting or a green icon in a VPN client does not prove that packets cannot leave your Mac directly. In VPN Sentinel, protection is only shown as active when both a permitted connection is selected and current enforcement confirmation is present; otherwise the state is shown as Unconfirmed.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ4">How do Trusted LAN and individual device denials interact?</summary>
+            <p data-i18n="faqA4">Each network starts untrusted. You can explicitly trust a network for local access, while still denying specific devices such as a NAS or printer. In SentinelPolicy, an explicit device denial has higher priority than both network trust and the 15-minute pause.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ5">How does the 15-minute protection pause work?</summary>
+            <p data-i18n="faqA5">When you start a pause, direct internet access is permitted in the model for up to 15 minutes. Switching to another network, rebooting, or clicking “End pause” terminates the pause immediately so direct access is never left open by accident.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ6">Does the app collect telemetry, analytics or network logs in the background?</summary>
+            <p data-i18n="faqA6">No. The app makes zero network requests, sends no telemetry, and stores its demo session only in memory. Diagnostic export writes a JSON file only when you explicitly click Export and choose a destination in the macOS Save panel.</p>
+          </details>
+          <details name="faq" class="faq-item">
+            <summary data-i18n="faqQ7">How can I verify the Apple notarization and signature on my Mac?</summary>
+            <p data-i18n="faqA7">Run shasum -a 256 -c SHA256SUMS, then check the extracted app with codesign --verify --deep --strict --all-architectures, xcrun stapler validate, and spctl --assess --type execute --verbose=4.</p>
+          </details>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <div class="container footer-inner">
+      <div class="footer-brand">
+        <img src="./assets/icon-192.png" alt="" width="28" height="28" loading="lazy">
+        <span><strong>VPN Sentinel</strong> · <span data-i18n="footerTagline">Tactical leak guard &amp; policy observatory for macOS.</span></span>
+      </div>
+      <nav class="footer-links" aria-label="Footer">
+        <a href="https://github.com/dvoineu/VPNSentinel" data-i18n="footerRepository">GitHub repository</a>
+        <a href="https://github.com/dvoineu/VPNSentinel/issues" data-i18n="footerIssues">Issues &amp; roadmap</a>
+        <a href="https://github.com/dvoineu/VPNSentinel/releases" data-i18n="dlVersions">All releases</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
